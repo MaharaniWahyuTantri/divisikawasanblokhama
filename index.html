@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peta Resiko Serangan Hama Tebu</title>
+  
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #ffffff;
+      color: #000000;
+      min-height: 100vh;
+    }
+
+    .app {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .header { text-align: center; margin-bottom: 6px; flex-shrink: 0; }
+    .header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #1B5E20, #2E7D32);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      align-items: end;
+      padding: 8px 10px;
+      border-bottom: 1px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+
+    .fg { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .fg label {
+      font-size: 0.6rem;
+      font-weight: 600;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .fg select {
+      padding: 5px 24px 5px 8px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236B7280' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E") no-repeat right 6px center;
+      color: #000000;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      appearance: none;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .fg select:hover, .fg select:focus { border-color: #2E7D32; outline: none; }
+    .fg select:focus { box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.15); }
+
+    .chart-wrap { flex: 1; min-height: 0; padding: 4px; position: relative; }
+    #treemap { width: 100%; height: 100%; }
+
+    .lo {
+      position: absolute; inset: 0;
+      background: rgba(255, 255, 255, 0.9);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 10; gap: 12px; transition: opacity 0.3s;
+    }
+    .lo.h { opacity: 0; pointer-events: none; }
+    .sp {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(46, 125, 50, 0.2); border-top-color: #2E7D32;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .lt { font-size: 0.85rem; color: #6B7280; }
+
+    .err {
+      padding: 10px 14px; background: #fef2f2;
+      border-bottom: 1px solid #fecaca; color: #C62828;
+      font-size: 0.8rem; display: none; flex-shrink: 0;
+    }
+    .err code {
+      display: block; margin-top: 6px; padding: 6px;
+      background: rgba(0, 0, 0, 0.05); border-radius: 4px;
+      font-size: 0.7rem; word-break: break-all; white-space: pre-wrap;
+    }
+
+    .footer { text-align: center; padding: 4px; font-size: 0.65rem; color: #6B7280; flex-shrink: 0; }
+  </style>
+</head>
+
+<body>
+<div class="app">
+
+  <div class="header">
+    <h1>Peta Resiko Serangan Hama Tebu</h1>
+  </div>
+
+  <div class="hero">
+    <div class="err" id="errBox">
+      <strong>Gagal memuat data.</strong>
+      <code id="errMsg"></code>
+    </div>
+
+    <div class="filters">
+      <div class="fg">
+        <label>Tahun</label>
+        <select id="fTahun"><option value="all">Semua Tahun</option></select>
+      </div>
+
+      <div class="fg">
+        <label>Kawasan</label>
+        <select id="fKawasan"><option value="all">Semua Kawasan</option></select>
+      </div>
+
+      <div class="fg">
+        <label>Divisi</label>
+        <select id="fDivisi"><option value="all">Semua Divisi</option></select>
+      </div>
+
+      <div class="fg">
+        <label>Jenis Hama</label>
+        <select id="fMetrik">
+          <option value="Total_Intensitas">Total Intensitas</option>
+          <option value="Stem Borer">Stem Borer</option>
+          <option value="Top Borer">Top Borer</option>
+          <option value="Scale Insect">Scale Insect</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="lo" id="loading">
+        <div class="sp"></div>
+        <div class="lt">Memuat data dari Google Sheets...</div>
+      </div>
+      <div id="treemap"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Data dimuat otomatis dari Google Spreadsheet &bull; Update: <span id="ts">—</span>
+  </div>
+
+</div>
+
+<script>
+// ID Google Sheet & Nama Kolom
+var SPREADSHEET_ID = '1VBVv2UitYd-HsIwY9dMo2fPyVHD3kitB';
+var SHEET_NAME = 'Sheet1';
+
+var K_KAWASAN = 'Kawasan';
+var K_DIVISI = 'Divisi';
+var K_BLOK = 'Nama Blok';
+var K_VARIETAS = 'Varietas Tebu';
+var K_TAHUN = 'Tahun';
+var K_SB = 'Stem Borer';
+var K_TB = 'Top Borer';
+var K_SI = 'Scale Insect';
+var K_TOTAL = 'Total_Intensitas';
+
+var dataMentah = [];
+var dataTerfilter = [];
+
+// fungsi helper sederhana
+function ambilAngka(val) {
+  var n = parseFloat(val);
+  return isNaN(n) ? 0 : n;
+}
+
+function bersihkanTeks(teks) {
+  if (teks === null || teks === undefined || String(teks).trim() === '') {
+    return 'Tidak diketahui';
+  }
+  return String(teks).trim();
+}
+
+function urutkanAlami(a, b) {
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function setTampilanLoading(tampil) {
+  var el = document.getElementById('loading');
+  if (el) el.classList.toggle('h', !tampil);
+}
+
+function tampilkanError(pesan) {
+  var box = document.getElementById('errBox');
+  var msg = document.getElementById('errMsg');
+  if (box && msg) {
+    box.style.display = 'block';
+    msg.textContent = pesan;
+  }
+}
+
+function sembunyikanError() {
+  var box = document.getElementById('errBox');
+  if (box) box.style.display = 'none';
+}
+
+// ambil data dari google sheets
+function ambilDataSpreadsheet() {
+  setTampilanLoading(true);
+  sembunyikanError();
+
+  var url = 'https://docs.google.com/spreadsheets/d/' + SPREADSHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_NAME);
+
+  fetch(url)
+    .then(function(res) {
+      if (!res.ok) throw new Error('Gagal ambil data (Status ' + res.status + ')');
+      return res.text();
+    })
+    .then(function(csvText) {
+      if (csvText.includes('<!DOCTYPE html>') || csvText.includes('<html')) {
+        throw new Error('Google Sheets mengembalikan HTML error. Pastikan sheet publik.');
+      }
+
+      Papa.parse(csvText, {
+        header: true,
+        dynamicTyping: true,
+        skipEmptyLines: true,
+        complete: function(hasil) {
+          dataMentah = [];
+          var rows = hasil.data;
+
+          for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var kw = row[K_KAWASAN];
+            var dv = row[K_DIVISI];
+
+            if ((kw === null || kw === undefined || kw === '') && (dv === null || dv === undefined || dv === '')) {
+              continue;
+            }
+
+            var sb = ambilAngka(row[K_SB]);
+            var tb = ambilAngka(row[K_TB]);
+            var si = ambilAngka(row[K_SI]);
+            var tot = row[K_TOTAL];
+
+            row[K_SB] = sb;
+            row[K_TB] = tb;
+            row[K_SI] = si;
+            row[K_TOTAL] = (tot !== null && tot !== undefined && tot !== '') ? ambilAngka(tot) : (sb + tb + si);
+
+            dataMentah.push(row);
+          }
+
+          if (dataMentah.length === 0) {
+            tampilkanError('Data kosong.');
+            setTampilanLoading(false);
+            return;
+          }
+
+          isiDropdownFilter();
+          prosesFilter();
+
+          var elTs = document.getElementById('ts');
+          if (elTs) elTs.textContent = new Date().toLocaleString('id-ID');
+        },
+        error: function(err) {
+          tampilkanError('Gagal parse CSV: ' + err.message);
+          setTampilanLoading(false);
+        }
+      });
+    })
+    .catch(function(err) {
+      tampilkanError(err.message);
+      setTampilanLoading(false);
+    });
+}
+
+// mengisi pilihan dropdown filter
+function isiDropdownFilter() {
+  var listTahun = [];
+  var listKawasan = [];
+  var listDivisi = [];
+
+  for (var i = 0; i < dataMentah.length; i++) {
+    var r = dataMentah[i];
+    var th = r[K_TAHUN];
+    var kw = r[K_KAWASAN];
+    var dv = r[K_DIVISI];
+
+    if (th && listTahun.indexOf(th) === -1) listTahun.push(th);
+    if (kw && listKawasan.indexOf(kw) === -1) listKawasan.push(kw);
+    if (dv && listDivisi.indexOf(dv) === -1) listDivisi.push(dv);
+  }
+
+  listTahun.sort(function(a, b) { return a - b; });
+  listKawasan.sort(urutkanAlami);
+  listDivisi.sort(urutkanAlami);
+
+  masukkanOpsiSelect('fTahun', listTahun, 'Semua Tahun', function(v) { return v; });
+  masukkanOpsiSelect('fKawasan', listKawasan, 'Semua Kawasan', function(v) { return 'Kawasan ' + v; });
+  masukkanOpsiSelect('fDivisi', listDivisi, 'Semua Divisi', function(v) { return 'Divisi ' + v; });
+}
+
+function masukkanOpsiSelect(idSelect, dataArray, labelDefault, formatTeks) {
+  var selectEl = document.getElementById(idSelect);
+  if (!selectEl) return;
+
+  selectEl.innerHTML = '';
+  var optDef = document.createElement('option');
+  optDef.value = 'all';
+  optDef.textContent = labelDefault;
+  selectEl.appendChild(optDef);
+
+  for (var j = 0; j < dataArray.length; j++) {
+    var val = dataArray[j];
+    var opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = formatTeks(val);
+    selectEl.appendChild(opt);
+  }
+}
+
+// memfilter data sesuai pilihan dropdown
+function prosesFilter() {
+  setTampilanLoading(true);
+
+  var thPilihan = document.getElementById('fTahun').value;
+  var kwPilihan = document.getElementById('fKawasan').value;
+  var dvPilihan = document.getElementById('fDivisi').value;
+
+  dataTerfilter = [];
+
+  for (var k = 0; k < dataMentah.length; k++) {
+    var r = dataMentah[k];
+
+    if (thPilihan !== 'all' && String(r[K_TAHUN]) !== String(thPilihan)) continue;
+    if (kwPilihan !== 'all' && String(r[K_KAWASAN]) !== String(kwPilihan)) continue;
+    if (dvPilihan !== 'all' && String(r[K_DIVISI]) !== String(dvPilihan)) continue;
+
+    dataTerfilter.push(r);
+  }
+
+  gambarTreemap();
+  setTimeout(function() { setTampilanLoading(false); }, 100);
+}
+
+// menggambar chart treemap dengan Plotly (Hierarki: Divisi -> Kawasan -> Blok -> Varietas)
+function gambarTreemap() {
+  var metrikPilihan = document.getElementById('fMetrik').value;
+
+  var grupDivisi = {};
+  var grupKawasan = {};
+  var grupBlok = {};
+  var grupLeaf = {};
+
+  // akumulasi data per grup
+  function tambahStat(grupObj, key, dataExtra, mVal, sb, tb, si, tot) {
+    if (!grupObj[key]) {
+      grupObj[key] = { count: 0, sum: 0, sb: 0, tb: 0, si: 0, tot: 0, extra: dataExtra };
+    }
+    grupObj[key].count += 1;
+    grupObj[key].sum += mVal;
+    grupObj[key].sb += sb;
+    grupObj[key].tb += tb;
+    grupObj[key].si += si;
+    grupObj[key].tot += tot;
+  }
+
+  for (var i = 0; i < dataTerfilter.length; i++) {
+    var row = dataTerfilter[i];
+
+    var dv = bersihkanTeks(row[K_DIVISI]);
+    var kw = bersihkanTeks(row[K_KAWASAN]);
+    var bk = bersihkanTeks(row[K_BLOK]);
+    var vr = bersihkanTeks(row[K_VARIETAS]);
+
+    var mVal = ambilAngka(row[metrikPilihan]);
+    var sb = ambilAngka(row[K_SB]);
+    var tb = ambilAngka(row[K_TB]);
+    var si = ambilAngka(row[K_SI]);
+    var tot = ambilAngka(row[K_TOTAL]);
+
+    // level 1: Divisi
+    tambahStat(grupDivisi, dv, { dv: dv }, mVal, sb, tb, si, tot);
+
+    // level 2: Kawasan (di bawah Divisi)
+    var keyKaw = dv + '___' + kw;
+    tambahStat(grupKawasan, keyKaw, { dv: dv, kw: kw }, mVal, sb, tb, si, tot);
+
+    // level 3: Blok (di bawah Kawasan)
+    var keyBlok = dv + '___' + kw + '___' + bk;
+    tambahStat(grupBlok, keyBlok, { dv: dv, kw: kw, bk: bk }, mVal, sb, tb, si, tot);
+
+    // level 4: Varietas / Leaf (di bawah Blok)
+    var keyLeaf = dv + '___' + kw + '___' + bk + '___' + vr;
+    tambahStat(grupLeaf, keyLeaf, { dv: dv, kw: kw, bk: bk, vr: vr }, mVal, sb, tb, si, tot);
+  }
+
+  // variabel masukan Plotly
+  var listIds = [];
+  var listLabels = [];
+  var listParents = [];
+  var listValues = [];
+  var listColors = [];
+  var listHovers = [];
+  var idTerpakai = {};
+
+  function pushNode(id, label, parent, val, color, textHover) {
+    if (idTerpakai[id]) return;
+    idTerpakai[id] = true;
+    listIds.push(id);
+    listLabels.push(label);
+    listParents.push(parent);
+    listValues.push(val);
+    listColors.push(color);
+    listHovers.push(textHover);
+  }
+
+  function buatHoverText(judul, subJudul, dataGrup) {
+    var c = dataGrup.count || 1;
+    return '<b>' + judul + '</b><br>' + subJudul + '<br><br>' +
+      'Stem Borer: ' + (dataGrup.sb / c).toFixed(1) + '%<br>' +
+      'Top Borer: ' + (dataGrup.tb / c).toFixed(1) + '%<br>' +
+      'Scale Insect: ' + (dataGrup.si / c).toFixed(1) + '%<br>' +
+      '<b>Total: ' + (dataGrup.tot / c).toFixed(1) + '%</b><br>' +
+      'Pengamatan: ' + dataGrup.count;
+  }
+
+  // 1. Node Level 1: Divisi (Parent = '')
+  var keysDv = Object.keys(grupDivisi).sort(urutkanAlami);
+  for (var k1 = 0; k1 < keysDv.length; k1++) {
+    var dvKey = keysDv[k1];
+    var gDv = grupDivisi[dvKey];
+    var avgDv = gDv.count ? (gDv.sum / gDv.count) : 0;
+    pushNode('D-' + dvKey, 'Divisi ' + dvKey, '', gDv.count, avgDv, buatHoverText('Divisi ' + dvKey, 'Divisi', gDv));
+  }
+
+  // 2. Node Level 2: Kawasan (Parent = Divisi)
+  var keysKw = Object.keys(grupKawasan).sort(urutkanAlami);
+  for (var k2 = 0; k2 < keysKw.length; k2++) {
+    var kwKey = keysKw[k2];
+    var gKw = grupKawasan[kwKey];
+    var avgKw = gKw.count ? (gKw.sum / gKw.count) : 0;
+    var idKaw = 'D-' + gKw.extra.dv + '-K-' + gKw.extra.kw;
+    var parentKaw = 'D-' + gKw.extra.dv;
+    pushNode(idKaw, 'Kawasan ' + gKw.extra.kw, parentKaw, gKw.count, avgKw, buatHoverText('Kawasan ' + gKw.extra.kw, 'Divisi ' + gKw.extra.dv, gKw));
+  }
+
+  // 3. Node Level 3: Blok (Parent = Kawasan)
+  var keysBk = Object.keys(grupBlok).sort(urutkanAlami);
+  for (var k3 = 0; k3 < keysBk.length; k3++) {
+    var bkKey = keysBk[k3];
+    var gBk = grupBlok[bkKey];
+    var avgBk = gBk.count ? (gBk.sum / gBk.count) : 0;
+    var idBlok = 'D-' + gBk.extra.dv + '-K-' + gBk.extra.kw + '-B-' + gBk.extra.bk;
+    var parentBlok = 'D-' + gBk.extra.dv + '-K-' + gBk.extra.kw;
+    pushNode(idBlok, 'Blok ' + gBk.extra.bk, parentBlok, gBk.count, avgBk, buatHoverText('Blok ' + gBk.extra.bk, 'Divisi ' + gBk.extra.dv + ', Kawasan ' + gBk.extra.kw, gBk));
+  }
+
+  // 4. Node Level 4: Varietas / Leaf (Parent = Blok)
+  var keysLf = Object.keys(grupLeaf).sort(urutkanAlami);
+  for (var k4 = 0; k4 < keysLf.length; k4++) {
+    var lfKey = keysLf[k4];
+    var gLf = grupLeaf[lfKey];
+    var avgLf = gLf.count ? (gLf.sum / gLf.count) : 0;
+    var parentLf = 'D-' + gLf.extra.dv + '-K-' + gLf.extra.kw + '-B-' + gLf.extra.bk;
+    var idLeaf = parentLf + '-V-' + gLf.extra.vr;
+    pushNode(idLeaf, gLf.extra.vr, parentLf, gLf.count, avgLf, buatHoverText(gLf.extra.vr, 'Divisi ' + gLf.extra.dv + ', Kawasan ' + gLf.extra.kw + ', Blok ' + gLf.extra.bk, gLf));
+  }
+
+  // hitung batas warna cmin dan cmax
+  var warnaValid = [];
+  for (var w = 0; w < listColors.length; w++) {
+    if (listColors[w] > 0) warnaValid.push(listColors[w]);
+  }
+  warnaValid.sort(function(a, b) { return a - b; });
+
+  var cminVal = 0;
+  var cmaxVal = 100;
+  if (warnaValid.length > 0) {
+    var index85 = Math.floor(warnaValid.length * 0.85);
+    cmaxVal = warnaValid[index85] || warnaValid[warnaValid.length - 1];
+  }
+
+  // atur warna font (hitam / putih)
+  var warnaFont = [];
+  for (var f = 0; f < listColors.length; f++) {
+    var valWarna = listColors[f];
+    var rasio = (cmaxVal > cminVal) ? ((valWarna - cminVal) / (cmaxVal - cminVal)) : 0;
+    warnaFont.push(rasio > 0.12 ? '#ffffff' : '#000000');
+  }
+
+  // hitung tinggi chart
+  var elWrap = document.querySelector('.chart-wrap');
+  var tinggiChart = (elWrap && elWrap.clientHeight > 0) ? elWrap.clientHeight : 350;
+
+  var labelLegend = metrikPilihan;
+  if (metrikPilihan === 'Total_Intensitas') labelLegend = 'Total Intensitas (%)';
+  else if (metrikPilihan === 'Stem Borer') labelLegend = 'Stem Borer (%)';
+  else if (metrikPilihan === 'Top Borer') labelLegend = 'Top Borer (%)';
+  else if (metrikPilihan === 'Scale Insect') labelLegend = 'Scale Insect (%)';
+
+  // render plotly
+  Plotly.newPlot('treemap', [{
+    type: 'treemap',
+    ids: listIds,
+    labels: listLabels,
+    parents: listParents,
+    values: listValues,
+    branchvalues: 'total',
+    marker: {
+      colors: listColors,
+      colorscale: [
+        [0, '#E8F5E9'],
+        [0.15, '#2E7D32'],
+        [0.3, '#1B5E20'],
+        [0.45, '#F9A825'],
+        [0.6, '#F57F17'],
+        [0.75, '#C62828'],
+        [1, '#B71C1C']
+      ],
+      cmin: cminVal,
+      cmax: cmaxVal,
+      colorbar: {
+        title: { text: labelLegend, font: { color: '#000000', size: 11 } },
+        tickfont: { color: '#6B7280' },
+        bgcolor: 'rgba(0,0,0,0)',
+        outlinewidth: 0
+      },
+      line: { width: 1.5, color: 'rgba(255,255,255,.6)' }
+    },
+    hoverinfo: 'text',
+    hovertext: listHovers,
+    textinfo: 'label+percent parent',
+    textfont: { size: 12, color: warnaFont, family: 'Inter' },
+    pathbar: { visible: true, textfont: { size: 12, color: '#000000' } },
+    maxdepth: 4
+  }], {
+    margin: { t: 6, l: 4, r: 4, b: 4 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: 'Inter', color: '#000000' },
+    height: tinggiChart
+  }, {
+    responsive: true,
+    displayModeBar: true,
+    modeBarButtonsToRemove: ['toImage', 'sendDataToCloud'],
+    displaylogo: false
+  });
+}
+
+// jalankan saat halaman siap
+document.addEventListener('DOMContentLoaded', function() {
+  var listFilterId = ['fTahun', 'fKawasan', 'fDivisi', 'fMetrik'];
+  for (var i = 0; i < listFilterId.length; i++) {
+    var elSel = document.getElementById(listFilterId[i]);
+    if (elSel) {
+      elSel.addEventListener('change', function() {
+        prosesFilter();
+      });
+    }
+  }
+
+  ambilDataSpreadsheet();
+});
+</script>
+</body>
+</html>
